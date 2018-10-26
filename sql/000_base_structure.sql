@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS `accounts` (
   `username` varchar(40) NOT NULL,
   `pass` varchar(255) NOT NULL,
   `email` varchar(255) DEFAULT NULL COMMENT 'Assocaited email: used for validating users, and re-setting passwords',
+  `timezone` varchar(35) NOT NULL DEFAULT '415',
   `notify_email` VARCHAR( 255 ) NULL DEFAULT NULL,
   `loggedIp` varchar(255) DEFAULT NULL,
   `is_locked` tinyint(1) NOT NULL DEFAULT '0',
@@ -26,12 +27,9 @@ CREATE TABLE IF NOT EXISTS `accounts` (
   `api_key` varchar(255) DEFAULT NULL,
   `token` varchar(65) DEFAULT NULL,
   `donate_percent` float DEFAULT '0',
-  `ap_threshold` float DEFAULT '0',
-  `coin_address` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`),
-  UNIQUE KEY `email` (`email`),
-  UNIQUE KEY `coin_address` (`coin_address`)
+  UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
 
 CREATE TABLE IF NOT EXISTS `blocks` (
@@ -45,12 +43,23 @@ CREATE TABLE IF NOT EXISTS `blocks` (
   `accounted` tinyint(1) NOT NULL DEFAULT '0',
   `account_id` int(255) unsigned DEFAULT NULL,
   `worker_name` varchar(50) DEFAULT 'unknown',
-  `shares` int(255) unsigned DEFAULT NULL,
+  `shares` double unsigned DEFAULT NULL,
   `share_id` bigint(30) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `height` (`height`,`blockhash`),
   KEY `time` (`time`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COMMENT='Discovered blocks persisted from Litecoin Service';
+
+CREATE TABLE IF NOT EXISTS `coin_addresses` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `account_id` int(11) NOT NULL,
+  `currency` varchar(5) NOT NULL,
+  `coin_address` varchar(255) NOT NULL,
+  `ap_threshold` float DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `coin_address` (`coin_address`),
+  KEY `account_id` (`account_id`)
+) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
 
 CREATE TABLE IF NOT EXISTS `invitations` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
@@ -133,7 +142,7 @@ CREATE TABLE IF NOT EXISTS `settings` (
   UNIQUE KEY `setting` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-INSERT INTO `settings` (`name`, `value`) VALUES ('DB_VERSION', '0.0.7');
+INSERT INTO `settings` (`name`, `value`) VALUES ('DB_VERSION', '1.0.3');
 
 CREATE TABLE IF NOT EXISTS `shares` (
   `id` bigint(30) NOT NULL AUTO_INCREMENT,
@@ -154,8 +163,8 @@ CREATE TABLE IF NOT EXISTS `shares` (
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
 
 CREATE TABLE IF NOT EXISTS `shares_archive` (
-  `id` int(255) unsigned NOT NULL AUTO_INCREMENT,
-  `share_id` int(255) unsigned NOT NULL,
+  `id` bigint(30) unsigned NOT NULL AUTO_INCREMENT,
+  `share_id` bigint(30) unsigned NOT NULL,
   `username` varchar(120) NOT NULL,
   `our_result` enum('Y','N') DEFAULT NULL,
   `upstream_result` enum('Y','N') DEFAULT NULL,
@@ -173,10 +182,10 @@ CREATE TABLE IF NOT EXISTS `statistics_shares` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `account_id` int(10) unsigned NOT NULL,
   `block_id` int(10) unsigned NOT NULL,
-  `valid` int(11) NOT NULL,
-  `invalid` int(11) NOT NULL DEFAULT '0',
-  `pplns_valid` int(11) NOT NULL,
-  `pplns_invalid` int(11) NOT NULL DEFAULT '0',
+  `valid` float unsigned NOT NULL DEFAULT '0',
+  `invalid` float unsigned NOT NULL DEFAULT '0',
+  `pplns_valid` float unsigned NOT NULL DEFAULT '0',
+  `pplns_invalid` float unsigned NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   KEY `account_id` (`account_id`),
   KEY `block_id` (`block_id`)
@@ -215,7 +224,7 @@ CREATE TABLE IF NOT EXISTS `transactions` (
   `account_id` int(255) unsigned NOT NULL,
   `type` varchar(25) DEFAULT NULL,
   `coin_address` varchar(255) DEFAULT NULL,
-  `amount` double DEFAULT '0',
+  `amount` decimal(50,30) DEFAULT '0',
   `block_id` int(255) DEFAULT NULL,
   `timestamp` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `txid` varchar(256) DEFAULT NULL,
@@ -228,13 +237,23 @@ CREATE TABLE IF NOT EXISTS `transactions` (
   KEY `account_id_archived` (`account_id`,`archived`)
 ) ENGINE=InnoDB  DEFAULT CHARSET=utf8;
 
-CREATE TABLE IF NOT EXISTS `templates` (
-  `template` varchar(255) NOT NULL,
-  `active` tinyint(1) NOT NULL DEFAULT 0,
-  `content` mediumtext,
-  `modified_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`template`)
+CREATE TABLE `statistics_users` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `account_id` int(11) NOT NULL,
+  `hashrate` bigint(20) unsigned NOT NULL,
+  `workers` int(11) NOT NULL,
+  `sharerate` float NOT NULL,
+  `timestamp` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `account_id_timestamp` (`account_id`,`timestamp`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE IF NOT EXISTS `user_settings` (
+  `account_id` int(11) NOT NULL,
+  `name` varchar(50) NOT NULL,
+  `value` text DEFAULT NULL,
+  PRIMARY KEY (`account_id`,`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 ROW_FORMAT=COMPACT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;

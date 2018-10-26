@@ -38,6 +38,10 @@ if (empty($aAllBlocks)) {
   $monitoring->endCronjob($cron_name, 'E0011', 0, true, false);
 }
 
+// Fetch precision
+$precision = $coin->getCoinValuePrevision();
+$table_precision = $coin->getCoinValuePrevision() + 3;
+
 $log->logDebug('Starting PPLNS payout process');
 $count = 0;
 foreach ($aAllBlocks as $iIndex => $aBlock) {
@@ -115,16 +119,16 @@ foreach ($aAllBlocks as $iIndex => $aBlock) {
         // Add archived shares to users current shares, if we have any in archive
         if (is_array($aArchiveShares)) {
           $log->logDebug('Found shares in archive to match PPLNS target, calculating per-user shares');
-          $strLogMask = "| %-20.20s | %15.15s | %15.15s | %15.15s | %15.15s | %15.15s | %15.15s |";
-          $log->logDebug(sprintf($strLogMask, 'Username', 'Round Valid', 'Archive Valid', 'Total Valid', 'Round Invalid', 'Archive Invalid', 'Total Invalid'));
+          $strLogMask = "| %5.5s | %-20.20s | %15.15s | %15.15s | %15.15s | %15.15s | %15.15s | %15.15s |";
+          $log->logDebug(sprintf($strLogMask, 'ID', 'Username', 'Round Valid', 'Archive Valid', 'Total Valid', 'Round Invalid', 'Archive Invalid', 'Total Invalid'));
           foreach($aAccountShares as $key => $aData) {
-            if (array_key_exists($aData['username'], $aArchiveShares)) {
-              $log->logDebug(sprintf($strLogMask, $aData['username'],
-                $aAccountShares[$key]['valid'], $aArchiveShares[$aData['username']]['valid'], ($aAccountShares[$key]['valid'] + $aArchiveShares[$aData['username']]['valid']),
-                $aAccountShares[$key]['invalid'], $aArchiveShares[$aData['username']]['invalid'], ($aAccountShares[$key]['invalid'] + $aArchiveShares[$aData['username']]['invalid']))
+            if (array_key_exists(strtolower($aData['username']), $aArchiveShares)) {
+              $log->logDebug(sprintf($strLogMask, $aData['id'], $aData['username'],
+                $aAccountShares[$key]['valid'], $aArchiveShares[strtolower($aData['username'])]['valid'], ($aAccountShares[$key]['valid'] + $aArchiveShares[strtolower($aData['username'])]['valid']),
+                $aAccountShares[$key]['invalid'], $aArchiveShares[strtolower($aData['username'])]['invalid'], ($aAccountShares[$key]['invalid'] + $aArchiveShares[strtolower($aData['username'])]['invalid']))
               );
-              $aAccountShares[$key]['valid'] += $aArchiveShares[$aData['username']]['valid'];
-              $aAccountShares[$key]['invalid'] += $aArchiveShares[$aData['username']]['invalid'];
+              $aAccountShares[$key]['valid'] += $aArchiveShares[strtolower($aData['username'])]['valid'];
+              $aAccountShares[$key]['invalid'] += $aArchiveShares[strtolower($aData['username'])]['invalid'];
             }
           }
           // reverse payout
@@ -132,13 +136,13 @@ foreach ($aAllBlocks as $iIndex => $aBlock) {
             $log->logDebug('Reverse payout enabled, adding shelved shares for all users');
             $aSharesData = NULL;
             foreach($aAccountShares as $key => $aData) {
-              $aSharesData[$aData['username']] = $aData;
+              $aSharesData[strtolower($aData['username'])] = $aData;
             }
             // Add users from archive not in current round
             $strLogMask = "| %-20.20s | %15.15s | %15.15s |";
             $log->logDebug(sprintf($strLogMask, 'Username', 'Shelved Valid', 'Shelved Invalid'));
             foreach($aArchiveShares as $key => $aArchData) {
-              if (!array_key_exists($aArchData['account'], $aSharesData)) {
+              if (!array_key_exists(strtolower($aArchData['account']), $aSharesData)) {
                 $log->logDebug(sprintf($strLogMask, $aArchData['account'], $aArchData['valid'], $aArchData['invalid']));
                 $aArchData['username'] = $aArchData['account'];
                 $aSharesData[$aArchData['account']] = $aArchData;
@@ -181,7 +185,7 @@ foreach ($aAllBlocks as $iIndex => $aBlock) {
     }
 
     // Table header for account shares
-    $strLogMask = "| %5.5s | %-15.15s | %15.15s | %15.15s | %12.12s | %15.15s | %15.15s | %15.15s | %15.15s |";
+    $strLogMask = "| %5.5s | %-15.15s | %15.15s | %15.15s | %12.12s | %${table_precision}.${table_precision}s | %${table_precision}.${table_precision}s | %${table_precision}.${table_precision}s | %${table_precision}.${table_precision}s |";
     $log->logInfo(sprintf($strLogMask, 'ID', 'Username', 'Valid', 'Invalid', 'Percentage', 'Payout', 'Donation', 'Fee', 'Bonus'));
 
     // Loop through all accounts that have found shares for this round
@@ -197,7 +201,7 @@ foreach ($aAllBlocks as $iIndex => $aBlock) {
 
       // Payout based on PPLNS target shares, proportional payout for all users
       $aData['percentage'] = round(( 100 / $iRoundShares) * $aData['pplns_valid'], 8);
-      $aData['payout'] = round(( $aData['percentage'] / 100 ) * $dReward, 8);
+      $aData['payout'] = ( $aData['percentage'] / 100 ) * $dReward;
       // Defaults
       $aData['fee' ] = 0;
       $aData['donation'] = 0;
@@ -205,19 +209,19 @@ foreach ($aAllBlocks as $iIndex => $aBlock) {
 
       // Calculate pool fees
       if ($config['fees'] > 0 && $aData['no_fees'] == 0)
-        $aData['fee'] = round($config['fees'] / 100 * $aData['payout'], 8);
+        $aData['fee'] = $config['fees'] / 100 * $aData['payout'];
 
       // Calculate pool bonus if it applies, will be paid from liquid assets!
       if ($config['pool_bonus'] > 0) {
         if ($config['pool_bonus_type'] == 'block') {
-          $aData['pool_bonus'] = round(( $config['pool_bonus'] / 100 ) * $dReward, 8);
+          $aData['pool_bonus'] = ( $config['pool_bonus'] / 100 ) * $dReward;
         } else {
-          $aData['pool_bonus'] = round(( $config['pool_bonus'] / 100 ) * $aData['payout'], 8);
+          $aData['pool_bonus'] = ( $config['pool_bonus'] / 100 ) * $aData['payout'];
         }
       }
 
       // Calculate donation amount, fees not included
-      $aData['donation'] = round($user->getDonatePercent($user->getUserId($aData['username'])) / 100 * ( $aData['payout'] - $aData['fee']), 8);
+      $aData['donation'] = $user->getDonatePercent($user->getUserId($aData['username'])) / 100 * ( $aData['payout'] - $aData['fee']);
 
       // Verbose output of this users calculations
       $log->logInfo(
@@ -285,4 +289,3 @@ foreach ($aAllBlocks as $iIndex => $aBlock) {
 }
 
 require_once('cron_end.inc.php');
-?>

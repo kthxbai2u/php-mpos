@@ -28,7 +28,13 @@ require_once('shared.inc.php');
 // Fetch our last block found from the DB as a starting point
 $aLastBlock = @$block->getLastValid();
 $strLastBlockHash = $aLastBlock['blockhash'];
-if (!$strLastBlockHash) $strLastBlockHash = '';
+if (!$strLastBlockHash) {
+  try {
+    $strLastBlockHash = $bitcoin->getblockhash(1);
+  } catch (Exception $e) {
+    $strLastBlockHash = "";
+  }
+}
 
 // Fetch all transactions since our last block
 if ( $bitcoin->can_connect() === true ){
@@ -59,7 +65,7 @@ if (empty($aTransactions['transactions'])) {
       $config['reward_type'] == 'block' ? $aData['amount'] = $aData['amount'] : $aData['amount'] = $config['reward'];
       $aData['height'] = $aBlockRPCInfo['height'];
       $aTxDetails = $bitcoin->gettransaction($aBlockRPCInfo['tx'][0]);
-      if (!isset($aBlockRPCInfo['confirmations'])) {
+      if (isset($aBlockRPCInfo['confirmations'])) {
         $aData['confirmations'] = $aBlockRPCInfo['confirmations'];
       } else if (isset($aTxDetails['confirmations'])) {
         $aData['confirmations'] = $aTxDetails['confirmations'];
@@ -157,8 +163,12 @@ if (empty($aAllBlocks)) {
         // Notify users
         $aAccounts = $notification->getNotificationAccountIdByType('new_block');
         if (is_array($aAccounts)) {
-		
-          $finder = $user->getUserName($iAccountId);
+          if ($user->getUserNameAnon($iAccountId) == 1) {
+                $finder = "Anonymous";
+          } else {
+               $finder = $user->getUserName($iAccountId);
+          }
+
           foreach ($aAccounts as $aData) {
             $aMailData['height'] = $aBlock['height'];
             $aMailData['subject'] = 'New Block';
@@ -178,4 +188,3 @@ if (empty($aAllBlocks)) {
 }
 
 require_once('cron_end.inc.php');
-?>

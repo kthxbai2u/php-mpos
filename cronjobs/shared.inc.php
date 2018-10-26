@@ -35,7 +35,7 @@ if (SECHASH_CHECK) {
 
 // MODIFY THIS
 // We need to find our include files so set this properly
-define("BASEPATH", "../public/");
+define("BASEPATH", dirname(__FILE__) . "/");
 
 /*****************************************************
  * No need to change beyond this point               *
@@ -48,32 +48,52 @@ $dStartTime = microtime(true);
 $cron_name = basename($_SERVER['PHP_SELF'], '.php');
 
 // Include our configuration (holding defines for the requires)
-require_once(BASEPATH . 'include/config/global.inc.dist.php');
-require_once(BASEPATH . 'include/config/global.inc.php');
+require_once(BASEPATH . '../include/bootstrap.php');
+require_once(BASEPATH . '../include/version.inc.php');
 
-require_once(BASEPATH . 'include/config/security.inc.dist.php');
-@include_once(BASEPATH . 'include/config/security.inc.php');
-
-require_once(BASEPATH . 'include/bootstrap.php');
-require_once(BASEPATH . 'include/version.inc.php');
+// Load 3rd party logging library for running crons
+$log = KLogger::instance( BASEPATH . '../logs/' . $cron_name, KLogger::INFO );
 
 // Command line switches
 array_shift($argv);
-foreach ($argv as $option) {
+foreach ($argv as $index => $option) {
   switch ($option) {
   case '-f':
     $monitoring->setStatus($cron_name . "_disabled", "yesno", 0);
     $monitoring->setStatus($cron_name . "_active", "yesno", 0);
     break;
+  case '-t':
+    // When `-t TIME_IN_SEC` is specified, we ignore the cron active flag
+    // if the time elapsed `TIME_IN_SEC` seconds after the last job started.
+
+    // Check the next argument is the value for -t option.
+    if (!($index + 1 < count($argv)) || // check if '-t' is not the last argument.
+        !(ctype_digit($argv[$index + 1]))) { // check the next argument is numeric string
+      $log->logFatal('Option -t requires an integer.');
+      $monitoring->endCronjob($cron_name, 'E0085', 3, true, false);
+    }
+
+    $timeout = intval($argv[$index + 1]);
+    $timeElapsedFromLastStart = $dStartTime - $monitoring->getLastCronStarted($cron_name);
+
+    if ($timeElapsedFromLastStart > $timeout) {
+      $log->logWarn("Previous cronjob `$cron_name` is started before than you specified by -t. Re-run forced.");
+      $monitoring->setStatus($cron_name . "_active", "yesno", 0);
+    }
+    break;
   }
 }
 
-// Load 3rd party logging library for running crons
-$log = KLogger::instance( 'logs/' . $cron_name, KLogger::INFO );
 $log->LogDebug('Starting ' . $cron_name);
 
 // Load the start time for later runtime calculations for monitoring
 $cron_start[$cron_name] = microtime(true);
+
+// Skip all crons if admin enabled pool maintenance
+if ($setting->getValue('maintenance')) {
+  $log->logInfo('Cronjobs disabled due to pool maintenance');
+  $monitoring->endCronjob($cron_name, 'E0083', 2, true, false);
+}
 
 // Check if our cron is activated
 if ($monitoring->isDisabled($cron_name)) {
@@ -93,5 +113,3 @@ if ($setting->getValue('DB_VERSION') != DB_VERSION || $config['version'] != CONF
   $log->logFatal('Cronjob is currently disabled due to required upgrades. Import any outstanding SQL files and check your configuration file.');
   $monitoring->endCronjob($cron_name, 'E0075', 0, true, false);
 }
-
-?>
