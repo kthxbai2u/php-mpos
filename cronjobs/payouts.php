@@ -48,10 +48,10 @@ if (!$dWalletBalance = $bitcoin->getrealbalance())
 empty($config['network_confirmations']) ? $confirmations = 120 : $confirmations = $config['network_confirmations'];
 $aBlocksUnconfirmed = $block->getAllUnconfirmed($confirmations);
 $dBlocksUnconfirmedBalance = 0;
-  if (!empty($aBlocksUnconfirmed))foreach ($aBlocksUnconfirmed as $aData) $dBlocksUnconfirmedBalance += $aData['amount'];
-
-$dWalletBalance -= $dBlocksUnconfirmedBalance;
-
+if (!empty($aBlocksUnconfirmed))foreach ($aBlocksUnconfirmed as $aData) $dBlocksUnconfirmedBalance += $aData['amount'];
+if ($config['getbalancewithunconfirmed']) {
+  $dWalletBalance -= $dBlocksUnconfirmedBalance;
+}
 // Fetch Newmint
 $aGetInfo = $bitcoin->getinfo();
 if (is_array($aGetInfo) && array_key_exists('newmint', $aGetInfo)) {
@@ -69,9 +69,9 @@ if ($setting->getValue('disable_manual_payouts') != 1 && $aManualPayouts) {
   foreach ($aManualPayouts as $aUserData) $dMPTotalAmount += $aUserData['confirmed'];
   if ($dMPTotalAmount > $dWalletBalance) {
     $log->logError(" Wallet does not cover MP payouts - Payout: " . $dMPTotalAmount . " - Balance: " . $dWalletBalance);
-    $monitoring->endCronjob($cron_name, 'E0079', 0, true);
+    $monitoring->endCronjob($cron_name, 'E0079', 1, true);
   }
-  
+
   $log->logInfo("Manual Payout Sum: " . $dMPTotalAmount . " | Liquid Assets: " . $dWalletBalance . " | Wallet Balance: " . ($dWalletBalance + $dBlocksUnconfirmedBalance) . " | Unconfirmed: " . $dBlocksUnconfirmedBalance);
   $log->logInfo('  found ' . count($aManualPayouts) . ' queued manual payouts');
   $mask = '    | %-10.10s | %-25.25s | %-20.20s | %-40.40s | %-20.20s |';
@@ -135,10 +135,10 @@ if (!$dWalletBalance = $bitcoin->getrealbalance())
 empty($config['network_confirmations']) ? $confirmations = 120 : $confirmations = $config['network_confirmations'];
 $aBlocksUnconfirmed = $block->getAllUnconfirmed($confirmations);
 $dBlocksUnconfirmedBalance = 0;
-  if (!empty($aBlocksUnconfirmed))foreach ($aBlocksUnconfirmed as $aData) $dBlocksUnconfirmedBalance += $aData['amount'];
-
-$dWalletBalance -= $dBlocksUnconfirmedBalance;
-
+if (!empty($aBlocksUnconfirmed))foreach ($aBlocksUnconfirmed as $aData) $dBlocksUnconfirmedBalance += $aData['amount'];
+if ($config['getbalancewithunconfirmed']) {
+  $dWalletBalance -= $dBlocksUnconfirmedBalance;
+}
 // Fetch Newmint
 $aGetInfo = $bitcoin->getinfo();
 if (is_array($aGetInfo) && array_key_exists('newmint', $aGetInfo)) {
@@ -156,9 +156,9 @@ if ($setting->getValue('disable_auto_payouts') != 1 && $aAutoPayouts) {
   foreach ($aAutoPayouts as $aUserData) $dAPTotalAmount += $aUserData['confirmed'];
   if ($dAPTotalAmount > $dWalletBalance) {
     $log->logError(" Wallet does not cover AP payouts - Payout: " . $dAPTotalAmount . " - Balance: " . $dWalletBalance);
-    $monitoring->endCronjob($cron_name, 'E0079', 0, true);
+    $monitoring->endCronjob($cron_name, 'E0079', 1, true);
   }
-  
+
   $log->logInfo("Auto Payout Sum: " . $dAPTotalAmount . " | Liquid Assets: " . $dWalletBalance . " | Wallet Balance: " . ($dWalletBalance + $dBlocksUnconfirmedBalance) . " | Unconfirmed: " . $dBlocksUnconfirmedBalance);
   $log->logInfo('  found ' . count($aAutoPayouts) . ' queued auto payouts');
   $mask = '    | %-10.10s | %-25.25s | %-20.20s | %-40.40s | %-20.20s |';
